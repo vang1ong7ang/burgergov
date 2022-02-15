@@ -1,6 +1,6 @@
 package main
 
-var cache struct {
+var github struct {
 }
 
 func init() {
