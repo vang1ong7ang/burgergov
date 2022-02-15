@@ -55,6 +55,7 @@ type CanVoteResp struct {
 }
 type ProposeReq struct {
 	Proposal *dao.Proposal
+	Readme   string
 }
 type ProposeResp struct {
 }

@@ -10,8 +10,7 @@ type Proposal struct {
 	Method          string
 	Args            []string
 	VotingTimestamp int64
-	Readme			string        // must contain when propose new proposal, will not show when list
-	ReadmeURL       string        // assigned by github
+	ReadmeURL       string
 }
 
 type ProposalStatus struct {
