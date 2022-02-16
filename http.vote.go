@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"strconv"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/hash"
@@ -168,3 +169,9 @@ func (v *Vote) CheckSig() bool {
 		return false
 	}
 }
+
+
+// 0. do not log user's input directly (check length)
+// 1. filter unsupported filed in extra (do not push to github)
+// 2. swtich the last put request's status code
+// 3. use path join instead of print directly
