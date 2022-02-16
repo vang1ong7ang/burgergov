@@ -12,6 +12,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/hash"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 )
 
@@ -138,17 +139,17 @@ func (v *Vote) CheckSig() bool {
 			PublicKey string
 			Salt      string
 		}
-		if err := json.Unmarshal([]byte(v.Extra), extra); err != nil {
+		if err := json.Unmarshal([]byte(v.Extra), &extra); err != nil {
 			log.Printf("invalid extra info for NEOLINE typed vote, err: %s\n", err.Error())
 			return false
 		}
 		pubKey, err := keys.NewPublicKeyFromString(extra.PublicKey)
-		if err := json.Unmarshal([]byte(v.Extra), extra); err != nil {
+		if err != nil {
 			log.Printf("invalid public key info for NEOLINE typed vote, err: %s\n", err.Error())
 			return false
 		}
-		if pubKey.Address() != v.Voter.String() {
-			log.Printf("public key info for NEOLINE typed vote not match the voter, pubKey address: %s, voter address: %s\n", pubKey.Address(), v.Voter)
+		if pubKey.Address() != address.Uint160ToString(v.Voter) {
+			log.Printf("public key info for NEOLINE typed vote not match the voter, pubKey address: %s, voter address: %s\n", pubKey.Address(), address.Uint160ToString(v.Voter))
 			return false
 		}
 
@@ -164,6 +165,7 @@ func (v *Vote) CheckSig() bool {
 			log.Printf("invalid signature: %s, err: %s\n", v.Signature, err.Error())
 			return false
 		}
+		println(v.Message())
 		return pubKey.Verify(sig, hashedData.BytesBE())
 	default:
 		log.Printf("unsupported vote type: %s\n", v.Type)
