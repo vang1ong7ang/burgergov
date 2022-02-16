@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	http.HandleFunc("/get_nbip", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/submit_vote", func(w http.ResponseWriter, r *http.Request) {
 		// get the `readme.md` and `nbip.json`
 		result := struct {
 			README string
