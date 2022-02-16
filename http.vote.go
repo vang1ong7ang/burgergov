@@ -1,18 +1,27 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/google/go-github/github"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neo-go/pkg/encoding/address"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 )
 
 func init() {
+	word := map[bool]string{true: "FOR", false: "AGAINST"}
+	strptr := func(v string) *string { return &v }
+
 	http.HandleFunc("/vote", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "invalid form data", http.StatusBadRequest)
@@ -65,7 +74,6 @@ func init() {
 				http.Error(w, "invalid public key", http.StatusBadRequest)
 				return
 			}
-			word := map[bool]string{true: "FOR", false: "AGAINST"}
 			message := fmt.Sprintf("I VOTE %s NBIP-%d.", word[yes], nbip)
 			if len(message) > 64 {
 				http.Error(w, "invalid nbip", http.StatusBadRequest)
@@ -103,8 +111,29 @@ func init() {
 			signature,
 			extra,
 		}
+		contentbt, err := json.Marshal(content)
+		if err != nil {
+			http.Error(w, "error", http.StatusInternalServerError)
+			log.Println("[ERROR]: ", err)
+			return
+		}
 
-		// TODO: upload
-		_ = content
+		ghctx, ghcancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer ghcancel()
+		ghcrsp, ghrsp, err := client.Repositories.CreateFile(ghctx, config.github_owner, config.github_repository,
+			fmt.Sprintf("0x%s.json", sh.StringLE()), &github.RepositoryContentFileOptions{
+				Branch:  strptr(fmt.Sprintf("NBIP-%d", nbip)),
+				Content: contentbt,
+				Message: strptr(fmt.Sprintf("0x%s VOTE %s NBIP-%d.", sh.StringLE(), word[yes], nbip)),
+				Author: &github.CommitAuthor{
+					Name:  strptr(address.Uint160ToString(sh)),
+					Email: strptr(fmt.Sprintf("%s@NOREPLY", address.Uint160ToString(sh))),
+				},
+			})
+		if err != nil {
+			http.Error(w, "error", http.StatusInternalServerError)
+			log.Println("[ERROR]: ", err, ghcrsp, ghrsp)
+			return
+		}
 	})
 }
