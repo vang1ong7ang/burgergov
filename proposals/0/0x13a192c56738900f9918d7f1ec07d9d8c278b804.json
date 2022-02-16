@@ -1,7 +1,8 @@
 {
-    "Voter": "0x13a192c56738900f9918d7f1ec07d9d8c278b804",
+    "Voter": "021319f4f1ece7181760b876dcc08f91dbffc4b55743c78a9fe827a2cc7a8e2600",
     "ProposalID": 0,
     "Accept": true,
-    "Vote": "[860833102,0,true]",
-    "Signature": "6a88e96f168528dc48895c2e48fcd3780cdc26e62fce83986d7e95b175c02de01d7db511a75a84a5581508bebd71e88d5445f3286960f8705d45a11274edea18"
+    "Message": "[860833102,0,true]",
+    "Salt": "4baa4b4257cfc7971907de0cd68aecf5",
+    "Signature": "c0bf05182fc055f8017b4da1bde0361a552ea9d434014122c78625c701f98d3b31ec222bdfef0182c56698967de9dee771e9e153d0fafe355790dfbe0f13f5fe"
 }
