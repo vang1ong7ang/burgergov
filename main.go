@@ -9,6 +9,7 @@ import (
 func main() {
 	addr := os.ExpandEnv(":${PORT}")
 	log.Println("[LISTEN]: ", addr)
-
-	http.ListenAndServe(addr, nil)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Println("[END]: ", err)
+	}
 }
