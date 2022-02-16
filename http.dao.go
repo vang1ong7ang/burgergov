@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/neoburger/burgergov/dao"
@@ -10,6 +13,27 @@ import (
 func CanPropose(rw http.ResponseWriter, r *http.Request) {
 	// 1. proposer has NoBug token
 	// 2. proposer has no active proposal yet
+	defer rw.Header().Set("Content-Type", "application/json; charset=utf-8")
+	reader, err := r.GetBody()
+	if err != nil {
+		http.Error(rw, "", http.StatusBadRequest)
+		return
+	}
+	reqbytes, err := ioutil.ReadAll(reader)
+	if err != nil {
+		http.Error(rw, "", http.StatusBadRequest)
+		return
+	}
+	var req *CanProposeReq
+	resp := &CanProposeResp{}
+	if err := json.Unmarshal(reqbytes, &req); err != nil {
+		http.Error(rw, "", http.StatusBadRequest)
+		return
+	}
+
+	resp.can = true;
+	respbyts, _ := json.Marshal(resp)
+	fmt.Fprintln(rw, respbyts)
 }
 func CanVote(rw http.ResponseWriter, r *http.Request) {
 	// 1. voter has NoBug token
