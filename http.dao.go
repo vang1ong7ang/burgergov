@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+
+	"github.com/neoburger/burgergov/dao"
 )
 
 // TODO
@@ -56,5 +58,4 @@ type VoteStatusReq struct {
 type VoteStatusResp struct {
 	proposal *dao.Proposal
 	status   *dao.ProposalStatus
->>>>>>> dev
 }
