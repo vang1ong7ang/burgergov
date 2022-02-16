@@ -20,6 +20,7 @@ func get_text_content(w http.ResponseWriter, r *http.Request, target string, id 
 	json.Unmarshal(body, &downloadUrl)
 	if downloadUrl.Download_url == ""{
 		http.NotFound(w, r)
+		w.Write(body)
 		return nil
 	}
 
