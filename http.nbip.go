@@ -48,17 +48,10 @@ func init() {
 			result := get_text_content(w, r, target, id)
 			w.Write(result)
 		case "all.json":
-			//result := struct {
-			//	README string
-			//	NBIP   string
-			//}{string(get_text_content(w, r, "README.md", id)), string(get_text_content(w, r, "nbip.json", id))}
-			//if err := json.NewEncoder(w).Encode(result); err != nil {
-			//	log.Println("[ERROR]: ", err)
-			//}
 			result := struct {
-				README []byte
-				NBIP   []byte
-			}{get_text_content(w, r, "README.md", id), get_text_content(w, r, "nbip.json", id)}
+				README string
+				NBIP   json.RawMessage
+			}{string(get_text_content(w, r, "README.md", id)), get_text_content(w, r, "nbip.json", id)}
 			if err := json.NewEncoder(w).Encode(result); err != nil {
 				log.Println("[ERROR]: ", err)
 			}
