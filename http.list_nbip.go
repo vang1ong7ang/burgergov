@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 )
 
 func init() {
@@ -20,7 +21,9 @@ func init() {
 		json.Unmarshal(body, &branches)
 		result := []string{}
 		for _, branch := range branches {
-			result = append(result, branch.Name)
+			if strings.HasPrefix(branch.Name, "NBIP-") {
+				result = append(result, branch.Name)
+			}
 		}
 		if err := json.NewEncoder(w).Encode(result); err != nil {
 			log.Println("[ERROR]: ", err)
