@@ -1,7 +1,7 @@
 package dao
 
 import (
-	"github.com/nspcc-dev/neo-go/pkg/util"
+	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 )
 
-type Voter util.Uint160
+type Voter keys.PublicKey
