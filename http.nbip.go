@@ -8,27 +8,37 @@ import (
 	"path"
 )
 
-func get_text_content(w http.ResponseWriter, r *http.Request, target string, id string) []byte {
+func get_text_content(target string, id string) ([]byte, error) {
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/" + config.github_repo + "/contents/" + target + "?ref=NBIP-" + id, nil)
+	req, err := http.NewRequest("GET", "https://api.github.com/repos/"+config.github_repo+"/contents/"+target+"?ref=NBIP-"+id, nil)
 	req.Header.Add("Authorization", "token "+config.github_token)
 	resp, err := client.Do(req)
-	if err != nil {log.Println(err)}
+	if err != nil {
+		log.Println(err)
+	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
 	var downloadUrl struct{ Download_url string }
 	json.Unmarshal(body, &downloadUrl)
-	if downloadUrl.Download_url == ""{
-		http.NotFound(w, r)
-		w.Write(body)
-		return nil
+	if downloadUrl.Download_url == "" {
+		return body, err
 	}
 
 	resp, err = http.Get(downloadUrl.Download_url)
-	if err != nil {log.Println(err)}
+	if err != nil {
+		log.Println(err)
+	}
 	defer resp.Body.Close()
-	result, _ := io.ReadAll(resp.Body)
-	return result
+	result, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	return result, nil
 }
 
 func init() {
@@ -46,13 +56,22 @@ func init() {
 		case "README.md":
 			fallthrough
 		case "nbip.json":
-			result := get_text_content(w, r, target, id)
+			result, err := get_text_content(target, id)
+			if err != nil {
+				http.NotFound(w, r)
+			}
 			w.Write(result)
 		case "all.json":
+			readmeResult, readmeErr := get_text_content("README.md", id)
+			nbipResult, nbipErr := get_text_content("nbip.json", id)
+			if readmeErr != nil || nbipErr != nil {
+				http.NotFound(w, r)
+				return
+			}
 			result := struct {
 				README string
 				NBIP   json.RawMessage
-			}{string(get_text_content(w, r, "README.md", id)), get_text_content(w, r, "nbip.json", id)}
+			}{string(readmeResult), nbipResult}
 			if err := json.NewEncoder(w).Encode(result); err != nil {
 				log.Println("[ERROR]: ", err)
 			}
