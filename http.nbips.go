@@ -31,7 +31,7 @@ func init() {
 				result = append(result, branch.Name)
 			}
 		}
-		// TODO: json header
+		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(result); err != nil {
 			log.Println("[ERROR]: ", err)
 		}
