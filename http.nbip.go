@@ -5,7 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"path/filepath"
+	"path"
 )
 
 func get_text_content(w http.ResponseWriter, r *http.Request, target string, id string) []byte {
@@ -32,12 +32,12 @@ func get_text_content(w http.ResponseWriter, r *http.Request, target string, id 
 
 func init() {
 	http.HandleFunc("/nbip/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		dir := filepath.Dir(path)
-		target := filepath.Base(path)
-		head := filepath.Dir(dir)
-		id := filepath.Base(dir)
-		if head != "/nbip" && head != "\\nbip" {
+		urlPath := r.URL.Path
+		dir := path.Dir(urlPath)
+		target := path.Base(urlPath)
+		head := path.Dir(dir)
+		id := path.Base(dir)
+		if head != "/nbip" {
 			http.NotFound(w, r)
 			return
 		}
