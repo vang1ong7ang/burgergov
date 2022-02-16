@@ -10,22 +10,26 @@ import (
 
 func get_text_content(w http.ResponseWriter, r *http.Request, target string, id string) []byte {
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/" + config.github_repo + "/contents/" + target + "?ref=NBIP-" + id, nil)
+	req, err := http.NewRequest("GET", "https://api.github.com/repos/"+config.github_owner+"/"+config.github_repository+"/contents/"+target+"?ref=NBIP-"+id, nil)
 	req.Header.Add("Authorization", "token "+config.github_token)
 	resp, err := client.Do(req)
-	if err != nil {log.Println(err)}
+	if err != nil {
+		log.Println(err)
+	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	var downloadUrl struct{ Download_url string }
 	json.Unmarshal(body, &downloadUrl)
-	if downloadUrl.Download_url == ""{
+	if downloadUrl.Download_url == "" {
 		http.NotFound(w, r)
 		w.Write(body)
 		return nil
 	}
 
 	resp, err = http.Get(downloadUrl.Download_url)
-	if err != nil {log.Println(err)}
+	if err != nil {
+		log.Println(err)
+	}
 	defer resp.Body.Close()
 	result, _ := io.ReadAll(resp.Body)
 	return result

@@ -11,7 +11,7 @@ import (
 
 func init() {
 	http.HandleFunc("/nbips.json", func(w http.ResponseWriter, r *http.Request) {
-		req := url.URL{Scheme: "https", Host: "api.github.com", Path: path.Join("/", "repos", config.github_repo, "branches")}
+		req := url.URL{Scheme: "https", Host: "api.github.com", Path: path.Join("/", "repos", config.github_owner, config.github_repository, "branches")}
 		resp, err := http.Get(req.String())
 		if err != nil {
 			http.Error(w, "error", http.StatusInternalServerError)
