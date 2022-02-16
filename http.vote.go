@@ -23,7 +23,7 @@ func init() {
 			http.Error(w, "invalid voter", http.StatusBadRequest)
 			return
 		}
-		sh, err := util.Uint160DecodeStringLE(voter)
+		sh, err := util.Uint160DecodeStringLE(voter[2:])
 		if err != nil {
 			http.Error(w, "invalid voter", http.StatusBadRequest)
 			return
