@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -17,7 +18,12 @@ func init() {
 			http.Error(w, "invalid form data", http.StatusBadRequest)
 			return
 		}
-		voter, err := util.Uint160DecodeStringBE(r.Form.Get("voter"))
+		voter := r.Form.Get("voter")
+		if strings.HasPrefix(voter, "0x") == false {
+			http.Error(w, "invalid voter", http.StatusBadRequest)
+			return
+		}
+		sh, err := util.Uint160DecodeStringLE(voter)
 		if err != nil {
 			http.Error(w, "invalid voter", http.StatusBadRequest)
 			return
@@ -55,7 +61,7 @@ func init() {
 				http.Error(w, "invalid extra", http.StatusBadRequest)
 				return
 			}
-			if pk.GetScriptHash() != voter {
+			if pk.GetScriptHash() != sh {
 				http.Error(w, "invalid public key", http.StatusBadRequest)
 				return
 			}
