@@ -14,15 +14,15 @@ func init() {
 		req := url.URL{Scheme: "https", Host: "api.github.com", Path: path.Join("/", "repos", config.github_repo, "branches")}
 		resp, err := http.Get(req.String())
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			// TODO: log
+			http.Error(w, "error", http.StatusInternalServerError)
+			log.Println("[ERROR]: [HTTP]: ", err)
 			return
 		}
 		defer resp.Body.Close()
 		var branches []struct{ Name string }
 		if err := json.NewDecoder(resp.Body).Decode(&branches); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			// TODO: log
+			http.Error(w, "error", http.StatusInternalServerError)
+			log.Println("[ERROR]: [JSON]: ", err)
 			return
 		}
 		result := []string{}
