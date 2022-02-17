@@ -1,38 +1,31 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"io"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"path"
+	"time"
+
+	"github.com/google/go-github/github"
 )
 
-func get_text_content(w http.ResponseWriter, r *http.Request, target string, id string) []byte {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/"+config.github_owner+"/"+config.github_repository+"/contents/"+target+"?ref=NBIP-"+id, nil)
-	req.Header.Add("Authorization", "token "+config.github_token)
-	resp, err := client.Do(req)
+func get_text_content(pathname string, ref string) ([]byte, error) {
+	ghctx, ghcancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer ghcancel()
+	reader, err := client.Repositories.DownloadContents(ghctx,
+		config.github_owner, config.github_repository, pathname,
+		&github.RepositoryContentGetOptions{
+			Ref: ref,
+		})
 	if err != nil {
-		log.Println(err)
+		return nil, err
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	var downloadUrl struct{ Download_url string }
-	json.Unmarshal(body, &downloadUrl)
-	if downloadUrl.Download_url == "" {
-		http.NotFound(w, r)
-		w.Write(body)
-		return nil
-	}
-
-	resp, err = http.Get(downloadUrl.Download_url)
-	if err != nil {
-		log.Println(err)
-	}
-	defer resp.Body.Close()
-	result, _ := io.ReadAll(resp.Body)
-	return result
+	defer reader.Close()
+	return ioutil.ReadAll(reader)
 }
 
 func init() {
@@ -50,13 +43,30 @@ func init() {
 		case "README.md":
 			fallthrough
 		case "nbip.json":
-			result := get_text_content(w, r, target, id)
+			result, err := get_text_content(target, fmt.Sprintf("NBIP-%s", id))
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
 			w.Write(result)
 		case "all.json":
+			readme, err := get_text_content("README.md", fmt.Sprintf("NBIP-%s", id))
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			nbip, err := get_text_content("nbip.json", fmt.Sprintf("NBIP-%s", id))
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
 			result := struct {
 				README string
 				NBIP   json.RawMessage
-			}{string(get_text_content(w, r, "README.md", id)), get_text_content(w, r, "nbip.json", id)}
+			}{
+				string(readme),
+				nbip,
+			}
 			if err := json.NewEncoder(w).Encode(result); err != nil {
 				log.Println("[ERROR]: ", err)
 			}
