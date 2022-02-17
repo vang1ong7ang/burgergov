@@ -26,13 +26,16 @@ var data struct {
 		synctime time.Time
 		readme   []byte
 		nbip     struct {
+			TIMESTAMP  int64
 			SCRIPTHASH util.Uint160
 			METHOD     string
 			ARGS       []interface{}
-			TIMESTAMP  int64
 		}
 		result struct {
-			// TODO
+			TIMESTAMP int64
+			PASSED    bool
+			YES       uint64
+			NO        uint64
 		}
 	}
 	nobug []struct {
@@ -80,13 +83,10 @@ func init() {
 						nbip.readme = nil // TODO
 						// nbip.nbip
 						// nbip.result
-
+						data.nbips[name] = nbip
 					}()
 				}
 			}()
-
-			// load nbips
-			// load nobug
 		}
 	}()
 }
