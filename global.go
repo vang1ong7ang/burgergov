@@ -262,29 +262,36 @@ func init() {
 						continue
 					}
 					// count
-					ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-					commits, _, _ := client.Repositories.ListCommits(ctx, config.github_owner, config.github_repository,
-						&github.CommitsListOptions{SHA: *branch.Commit.SHA})
-					cancel()
+					currentPage := 1
+					perPage := 100
+					for{
+						ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+						commits, _, err := client.Repositories.ListCommits(ctx, config.github_owner, config.github_repository,
+							&github.CommitsListOptions{SHA: name, ListOptions: github.ListOptions{Page: currentPage, PerPage: perPage}})
+						cancel()
+						if err != nil{break}
+						if commits == nil{break}
 
-					if data.votes[name] == nil {
-						data.votes[name] = make(map[util.Uint160]bool)
-					}
+						if data.votes[name] == nil {
+							data.votes[name] = make(map[util.Uint160]bool)
+						}
 
-					for _, commit := range commits {
-						message := *commit.Commit.Message
-						re := regexp.MustCompile("(0x\\w{40}) VOTE (FOR|AGAINST) " + name)
-						match := re.FindStringSubmatch(message)
-						if match == nil {
-							continue
+						for _, commit := range commits {
+							message := *commit.Commit.Message
+							re := regexp.MustCompile("(0x\\w{40}) VOTE (FOR|AGAINST) " + name)
+							match := re.FindStringSubmatch(message)
+							if match == nil {
+								continue
+							}
+							voter, err := util.Uint160DecodeStringBE(match[1][2:])
+							if err != nil {
+								continue
+							}
+							if _, ok := data.votes[name][voter]; !ok {
+								data.votes[name][voter] = match[2] == "FOR"
+							}
 						}
-						voter, err := util.Uint160DecodeStringBE(match[1][2:])
-						if err != nil {
-							continue
-						}
-						if _, ok := data.votes[name][voter]; !ok {
-							data.votes[name][voter] = match[2] == "FOR"
-						}
+						if len(commits) < perPage {break} else {currentPage += 1}
 					}
 				}
 			}()
