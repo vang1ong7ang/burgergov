@@ -1,14 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -63,6 +59,8 @@ func init() {
 	tc := oauth2.NewClient(context.Background(), ts)
 	client = github.NewClient(tc)
 
+	http.DefaultClient.Timeout = time.Second * 10
+
 	data.nbips = make(map[string]struct {
 		SYNCTIME time.Time
 		README   string
@@ -101,11 +99,6 @@ func init() {
 						NO        uint64
 					}
 				})
-				defer func() {
-					data.lock.Lock()
-					defer data.lock.Unlock()
-					data.nbips = nbips
-				}()
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 				defer cancel()
 				gb, gr, err := client.Repositories.ListBranches(ctx, config.github_owner, config.github_repository, &github.ListOptions{
@@ -113,6 +106,7 @@ func init() {
 				})
 				if err != nil {
 					log.Println("[ERROR]: ", "[SYNC]:", err, gr)
+					return
 				}
 				synctime := time.Now()
 				for _, branch := range gb {
@@ -199,7 +193,44 @@ func init() {
 						}
 					}()
 				}
+				data.lock.Lock()
+				defer data.lock.Unlock()
+				data.nbips = nbips
 
+			}()
+			func() {
+				// TODO: load more addresses
+				nobug := make(map[util.Uint160]uint64)
+				req := strings.NewReader(`{"jsonrpc": "2.0","method": "GetAssetHoldersByContractHash","params": {"ContractHash":"0x54806765d451e2b0425072730d527d05fbfa9817","Limit":4096,"Skip":0},"id": 1}`)
+				rsp, err := http.Post("https://neofura.ngd.network", "application/json", req)
+				if err != nil {
+					log.Println("[ERROR]: ", "[SYNC]:", err, rsp)
+					return
+				}
+				defer rsp.Body.Close()
+				var output struct {
+					Result struct {
+						Result []struct {
+							Address util.Uint160
+							Balance string
+						}
+					}
+				}
+				if err := json.NewDecoder(rsp.Body).Decode(&output); err != nil {
+					log.Println("[ERROR]: ", "[SYNC]:", err)
+					return
+				}
+				for _, r := range output.Result.Result {
+					balance, err := strconv.ParseUint(r.Balance, 10, 64)
+					if err != nil {
+						log.Println("[ERROR]: ", "[SYNC]: ", err, "balance: ", r.Balance, "addr: ", r.Address)
+						return
+					}
+					nobug[r.Address] = balance
+				}
+				data.lock.Lock()
+				defer data.lock.Unlock()
+				data.nobug = nobug
 			}()
 			func() {
 				data.lock.RLock()
@@ -207,50 +238,7 @@ func init() {
 				for k := range data.nbips {
 					log.Println("[MAINTAINED]: ", k)
 				}
-			}()
-			func() {
-				// load nobug
-				nobug := make(map[util.Uint160]uint64)
-				for skip, limit, total := 0, 100, math.MaxInt64; skip < total; skip += limit {
-					req := bytes.NewBuffer(nil)
-					fmt.Fprintf(req, `{"jsonrpc": "2.0","method": "GetAssetHoldersByContractHash","params": {"ContractHash":"0x54806765d451e2b0425072730d527d05fbfa9817","Limit":%d,"Skip":%d},"id": 1}`, limit, skip)
-					rsp, err := http.Post("https://neofura.ngd.network", "application/json", req)
-					if err != nil {
-						log.Println("[ERROR]: ", "[SYNC]:", err, rsp)
-						return
-					}
-					rspbytes, err := io.ReadAll(rsp.Body)
-					defer rsp.Body.Close()
-					var output struct {
-						Id     int
-						Result struct {
-							Result []struct {
-								Id      int
-								Address util.Uint160
-								Balance string
-							}
-							TotalCount int
-						}
-					}
-					err = json.Unmarshal(rspbytes, &output)
-					if err != nil {
-						log.Println("[ERROR]: ", "[SYNC]:", err, "rsp:", hex.EncodeToString(rspbytes))
-						return
-					}
-					total = output.Result.TotalCount
-					for _, r := range output.Result.Result {
-						balance, err := strconv.ParseUint(r.Balance, 10, 64)
-						if err != nil {
-							log.Println("[ERROR]: ", "[SYNC]:", err, "balance:", r.Balance, "addr:", r.Address)
-							return
-						}
-						nobug[r.Address] = balance
-					}
-				}
-				data.lock.Lock()
-				defer data.lock.Unlock()
-				data.nobug = nobug
-				log.Println("[MAINTAINED]: nobug holder sync finish, total holder number: ", len(data.nobug))
+				log.Println("[MAINTAINED]:", "[HOLDER]:", len(data.nobug))
 			}()
 			func() {
 				// fill votes
