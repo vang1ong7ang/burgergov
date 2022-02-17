@@ -176,6 +176,12 @@ func init() {
 					}
 				}()
 			}()
+			func() {
+				// load nobug
+			}()
+			func() {
+				// count
+			}()
 		}
 	}()
 }
