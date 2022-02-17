@@ -97,8 +97,7 @@ func init() {
 			http.Error(w, "invalid profile", http.StatusBadRequest)
 			return
 		}
-
-		content := struct {
+		conten, err := json.Marshal(struct {
 			NBIP      int
 			YES       bool
 			PROFILE   string
@@ -110,29 +109,26 @@ func init() {
 			profile,
 			signature,
 			extra,
-		}
-		contentbt, err := json.Marshal(content)
+		})
 		if err != nil {
 			http.Error(w, "error", http.StatusInternalServerError)
 			log.Println("[ERROR]: ", err)
 			return
 		}
-
-		ghctx, ghcancel := context.WithTimeout(context.Background(), time.Second*5)
-		defer ghcancel()
-		ghcrsp, ghrsp, err := client.Repositories.CreateFile(ghctx, config.github_owner, config.github_repository,
-			fmt.Sprintf("0x%s.json", sh.StringLE()), &github.RepositoryContentFileOptions{
-				Branch:  strptr(fmt.Sprintf("NBIP-%d", nbip)),
-				Content: contentbt,
-				Message: strptr(fmt.Sprintf("0x%s VOTE %s NBIP-%d.", sh.StringLE(), word[yes], nbip)),
-				Author: &github.CommitAuthor{
-					Name:  strptr(address.Uint160ToString(sh)),
-					Email: strptr(fmt.Sprintf("%s@NOREPLY", address.Uint160ToString(sh))),
-				},
-			})
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		grcr, gr, err := client.Repositories.CreateFile(ctx, config.github_owner, config.github_repository, fmt.Sprintf("0x%s.json", sh.StringLE()), &github.RepositoryContentFileOptions{
+			Branch:  strptr(fmt.Sprintf("NBIP-%d", nbip)),
+			Content: conten,
+			Message: strptr(fmt.Sprintf("0x%s VOTE %s NBIP-%d.", sh.StringLE(), word[yes], nbip)),
+			Author: &github.CommitAuthor{
+				Name:  strptr(address.Uint160ToString(sh)),
+				Email: strptr(fmt.Sprintf("%s@NOREPLY", address.Uint160ToString(sh))),
+			},
+		})
 		if err != nil {
 			http.Error(w, "error", http.StatusInternalServerError)
-			log.Println("[ERROR]: ", err, ghcrsp, ghrsp)
+			log.Println("[ERROR]: ", err, grcr, gr)
 			return
 		}
 	})
