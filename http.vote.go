@@ -97,7 +97,7 @@ func init() {
 			http.Error(w, "invalid profile", http.StatusBadRequest)
 			return
 		}
-		conten, err := json.Marshal(struct {
+		content, err := json.Marshal(struct {
 			NBIP      int
 			YES       bool
 			PROFILE   string
@@ -119,7 +119,7 @@ func init() {
 		defer cancel()
 		grcr, gr, err := client.Repositories.CreateFile(ctx, config.github_owner, config.github_repository, fmt.Sprintf("0x%s.json", sh.StringLE()), &github.RepositoryContentFileOptions{
 			Branch:  strptr(fmt.Sprintf("NBIP-%d", nbip)),
-			Content: conten,
+			Content: content,
 			Message: strptr(fmt.Sprintf("0x%s VOTE %s NBIP-%d.", sh.StringLE(), word[yes], nbip)),
 			Author: &github.CommitAuthor{
 				Name:  strptr(address.Uint160ToString(sh)),
