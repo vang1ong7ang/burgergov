@@ -1,11 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
+	"math"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -202,6 +208,47 @@ func init() {
 			}()
 			func() {
 				// load nobug
+				nobug := make(map[util.Uint160]uint64)
+				for skip, limit, total := 0, 100, math.MaxInt64; skip < total; skip += limit {
+					req := bytes.NewBuffer(nil)
+					fmt.Fprintf(req, `{"jsonrpc": "2.0","method": "GetAssetHoldersByContractHash","params": {"ContractHash":"0x54806765d451e2b0425072730d527d05fbfa9817","Limit":%d,"Skip":%d},"id": 1}`, limit, skip)
+					rsp, err := http.Post("https://neofura.ngd.network", "application/json", req)
+					if err != nil {
+						log.Println("[ERROR]: ", "[SYNC]:", err, rsp)
+						return
+					}
+					rspbytes, err := io.ReadAll(rsp.Body)
+					defer rsp.Body.Close()
+					var output struct {
+						Id     int
+						Result struct {
+							Result []struct {
+								Id      int
+								Address util.Uint160
+								Balance string
+							}
+							TotalCount int
+						}
+					}
+					err = json.Unmarshal(rspbytes, &output)
+					if err != nil {
+						log.Println("[ERROR]: ", "[SYNC]:", err, "rsp:", hex.EncodeToString(rspbytes))
+						return
+					}
+					total = output.Result.TotalCount
+					for _, r := range output.Result.Result {
+						balance, err := strconv.ParseUint(r.Balance, 10, 64)
+						if err != nil {
+							log.Println("[ERROR]: ", "[SYNC]:", err, "balance:", r.Balance, "addr:", r.Address)
+							return
+						}
+						nobug[r.Address] = balance
+					}
+				}
+				data.lock.Lock()
+				defer data.lock.Unlock()
+				data.nobug = nobug
+				log.Println("[MAINTAINED]: nobug holder sync finish, total holder number: ", len(data.nobug))
 			}()
 			func() {
 				// count
