@@ -47,6 +47,7 @@ var data struct {
 		}
 	}
 	nobug map[util.Uint160]uint64
+	votes map[string]map[util.Uint160]bool
 }
 
 var client *github.Client
@@ -79,6 +80,7 @@ func init() {
 		}
 	})
 	data.nobug = make(map[util.Uint160]uint64)
+	data.votes = make(map[string]map[util.Uint160]bool)
 
 	go func() {
 		for ; ; time.Sleep(time.Hour) {
