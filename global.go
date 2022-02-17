@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -241,12 +242,50 @@ func init() {
 				log.Println("[MAINTAINED]:", "[HOLDER]:", len(data.nobug))
 			}()
 			func() {
+				// TODO: Instead of retrieving the branches again,
+				// TODO: save the SHA of each NBIP branch in the previous steps, and retrieve those SHA here
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				gb, gr, err := client.Repositories.ListBranches(ctx, config.github_owner, config.github_repository, &github.ListOptions{
+					PerPage: 100,
+				})
+				if err != nil {
+					log.Println("[ERROR]: ", "[SYNC]:", err, gr)
+				}
 				// fill votes
-				for _, v := range data.nbips {
-					if v.RESULT.TIMESTAMP != 0 {
+				for _, branch := range gb {
+					name := branch.GetName()
+					if !strings.HasPrefix(name, "NBIP-") {
+						continue
+					}
+					if data.nbips[name].RESULT.TIMESTAMP != 0 {
 						continue
 					}
 					// count
+					ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+					commits, _, _ := client.Repositories.ListCommits(ctx, config.github_owner, config.github_repository,
+						&github.CommitsListOptions{SHA: *branch.Commit.SHA})
+					cancel()
+
+					if data.votes[name] == nil {
+						data.votes[name] = make(map[util.Uint160]bool)
+					}
+
+					for _, commit := range commits {
+						message := *commit.Commit.Message
+						re := regexp.MustCompile("(0x\\w{40}) VOTE (FOR|AGAINST) " + name)
+						match := re.FindStringSubmatch(message)
+						if match == nil {
+							continue
+						}
+						voter, err := util.Uint160DecodeStringBE(match[1][2:])
+						if err != nil {
+							continue
+						}
+						if _, ok := data.votes[name][voter]; !ok {
+							data.votes[name][voter] = match[2] == "FOR"
+						}
+					}
 				}
 			}()
 		}
