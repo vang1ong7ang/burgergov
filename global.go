@@ -56,6 +56,22 @@ func init() {
 	tc := oauth2.NewClient(context.Background(), ts)
 	client = github.NewClient(tc)
 
+	data.nbips = make(map[string]struct {
+		SYNCTIME time.Time
+		README   string
+		NBIP     struct {
+			TIMESTAMP  int64
+			SCRIPTHASH util.Uint160
+			METHOD     string
+			ARGS       []interface{}
+		}
+		RESULT struct {
+			TIMESTAMP int64
+			PASSED    bool
+			YES       uint64
+			NO        uint64
+		}
+	})
 	data.nobug = make(map[util.Uint160]uint64)
 
 	go func() {
