@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/go-github/github"
@@ -19,9 +21,11 @@ var config struct {
 }
 
 var data struct {
-	nbips []struct {
-		readme []byte
-		nbip   struct {
+	lock  sync.RWMutex
+	nbips map[string]struct {
+		synctime time.Time
+		readme   []byte
+		nbip     struct {
 			SCRIPTHASH util.Uint160
 			METHOD     string
 			ARGS       []interface{}
@@ -50,6 +54,37 @@ func init() {
 
 	go func() {
 		for ; ; time.Sleep(time.Hour) {
+			func() {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				gb, gr, err := client.Repositories.ListBranches(ctx, config.github_owner, config.github_repository, &github.ListOptions{
+					PerPage: 100,
+				})
+				if err != nil {
+					log.Println("[ERROR]: ", "[SYNC]:", err, gr)
+				}
+				synctime := time.Now()
+				for _, branch := range gb {
+					name := branch.GetName()
+					if strings.HasPrefix(name, "NBIP-") == false {
+						continue
+					}
+					// get readme
+					// get nbip.json
+					// get result.json
+					func() {
+						data.lock.Lock()
+						defer data.lock.Unlock()
+						nbip := data.nbips[name]
+						nbip.synctime = synctime
+						nbip.readme = nil // TODO
+						// nbip.nbip
+						// nbip.result
+
+					}()
+				}
+			}()
+
 			// load nbips
 			// load nobug
 		}
