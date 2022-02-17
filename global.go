@@ -253,14 +253,12 @@ func init() {
 				log.Println("[MAINTAINED]: nobug holder sync finish, total holder number: ", len(data.nobug))
 			}()
 			func() {
-				// count
+				// fill votes
 				for _, v := range data.nbips {
 					if v.RESULT.TIMESTAMP != 0 {
 						continue
 					}
 					// count
-					v.RESULT.YES = 0 // TODO
-					v.RESULT.NO = 0  // TODO
 				}
 			}()
 		}
