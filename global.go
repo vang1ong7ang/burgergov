@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -23,22 +25,22 @@ var config struct {
 var data struct {
 	lock  sync.RWMutex
 	nbips map[string]struct {
-		synctime time.Time
-		readme   []byte
-		nbip     struct {
+		SYNCTIME time.Time
+		README   string
+		NBIP     struct {
 			TIMESTAMP  int64
 			SCRIPTHASH util.Uint160
 			METHOD     string
 			ARGS       []interface{}
 		}
-		result struct {
+		RESULT struct {
 			TIMESTAMP int64
 			PASSED    bool
 			YES       uint64
 			NO        uint64
 		}
 	}
-	nobug []struct {
+	nobug map[string]struct {
 	}
 }
 
@@ -49,11 +51,28 @@ func init() {
 	config.github_owner = os.ExpandEnv("${GITHUBOWNER}")
 	config.github_repository = os.ExpandEnv("${GITHUBREPOSITORY}")
 	config.listen_address = os.ExpandEnv(":${PORT}")
-	log.Println("[CONFIG]: ", config)
+	log.Println("[LISTEN]:", config.listen_address)
 
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: config.github_token})
 	tc := oauth2.NewClient(context.Background(), ts)
 	client = github.NewClient(tc)
+
+	data.nbips = make(map[string]struct {
+		SYNCTIME time.Time
+		README   string
+		NBIP     struct {
+			TIMESTAMP  int64
+			SCRIPTHASH util.Uint160
+			METHOD     string
+			ARGS       []interface{}
+		}
+		RESULT struct {
+			TIMESTAMP int64
+			PASSED    bool
+			YES       uint64
+			NO        uint64
+		}
+	})
 
 	go func() {
 		for ; ; time.Sleep(time.Hour) {
@@ -72,20 +91,90 @@ func init() {
 					if strings.HasPrefix(name, "NBIP-") == false {
 						continue
 					}
-					// get readme
-					// get nbip.json
-					// get result.json
+					var readme []byte
+					var nbipjson []byte
+					var resultjson []byte
+					func() {
+						reader, err := client.Repositories.DownloadContents(ctx, config.github_owner, config.github_repository, "README.md", &github.RepositoryContentGetOptions{
+							Ref: name,
+						})
+						if err != nil {
+							// TODO: log
+							return
+						}
+						defer reader.Close()
+						readme, err = io.ReadAll(reader)
+						if err != nil {
+							// TODO: log
+						}
+					}()
+					func() {
+						reader, err := client.Repositories.DownloadContents(ctx, config.github_owner, config.github_repository, "nbip.json", &github.RepositoryContentGetOptions{
+							Ref: name,
+						})
+						if err != nil {
+							// TODO: log
+							return
+						}
+						defer reader.Close()
+						nbipjson, err = io.ReadAll(reader)
+						if err != nil {
+							// TODO: log
+						}
+					}()
+					func() {
+						reader, err := client.Repositories.DownloadContents(ctx, config.github_owner, config.github_repository, "result.json", &github.RepositoryContentGetOptions{
+							Ref: name,
+						})
+						if err != nil {
+							// TODO: log
+							return
+						}
+						defer reader.Close()
+						resultjson, err = io.ReadAll(reader)
+						if err != nil {
+							// TODO: log
+						}
+					}()
 					func() {
 						data.lock.Lock()
 						defer data.lock.Unlock()
 						nbip := data.nbips[name]
-						nbip.synctime = synctime
-						nbip.readme = nil // TODO
-						// nbip.nbip
-						// nbip.result
-						data.nbips[name] = nbip
+						defer func() { data.nbips[name] = nbip }()
+						nbip.SYNCTIME = synctime
+						nbip.README = string(readme)
+						nbip.NBIP.TIMESTAMP = 0
+						nbip.RESULT.TIMESTAMP = 0
+						if len(nbipjson) == 0 {
+							return
+						}
+						if err := json.Unmarshal(nbipjson, &nbip.NBIP); err != nil {
+							// TODO: log
+						}
+						if len(resultjson) == 0 {
+							return
+						}
+						if err := json.Unmarshal(resultjson, &nbip.RESULT); err != nil {
+							// TODO: log
+						}
 					}()
 				}
+				func() {
+					data.lock.Lock()
+					defer data.lock.Unlock()
+					for k, v := range data.nbips {
+						if v.SYNCTIME != synctime {
+							delete(data.nbips, k)
+						}
+					}
+				}()
+				func() {
+					data.lock.RLock()
+					defer data.lock.RUnlock()
+					for k := range data.nbips {
+						log.Println("[MAINTAINED]: ", k)
+					}
+				}()
 			}()
 		}
 	}()
