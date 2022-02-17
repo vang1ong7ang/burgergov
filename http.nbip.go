@@ -16,11 +16,9 @@ import (
 func get_text_content(pathname string, ref string) ([]byte, error) {
 	ghctx, ghcancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer ghcancel()
-	reader, err := client.Repositories.DownloadContents(ghctx,
-		config.github_owner, config.github_repository, pathname,
-		&github.RepositoryContentGetOptions{
-			Ref: ref,
-		})
+	reader, err := client.Repositories.DownloadContents(ghctx, config.github_owner, config.github_repository, pathname, &github.RepositoryContentGetOptions{
+		Ref: ref,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -40,9 +38,7 @@ func init() {
 			return
 		}
 		switch target {
-		case "README.md":
-			fallthrough
-		case "nbip.json":
+		case "README.md", "nbip.json":
 			result, err := get_text_content(target, fmt.Sprintf("NBIP-%s", id))
 			if err != nil {
 				http.NotFound(w, r)

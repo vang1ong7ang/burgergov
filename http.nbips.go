@@ -1,38 +1,40 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
-	"net/url"
-	"path"
 	"strings"
+	"time"
+
+	"github.com/google/go-github/github"
 )
 
 func init() {
 	http.HandleFunc("/nbips.json", func(w http.ResponseWriter, r *http.Request) {
-		req := url.URL{Scheme: "https", Host: "api.github.com", Path: path.Join("/", "repos", config.github_owner, config.github_repository, "branches")}
-		resp, err := http.Get(req.String())
+		ghctx, ghcancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer ghcancel()
+		// TODO: list all branches (100 max now)
+		branches, rsp, err := client.Repositories.ListBranches(ghctx, config.github_owner, config.github_repository,
+			&github.ListOptions{
+				Page: 1,
+				PerPage: 100,
+			})
 		if err != nil {
 			http.Error(w, "error", http.StatusInternalServerError)
-			log.Println("[ERROR]: [HTTP]: ", err)
-			return
-		}
-		defer resp.Body.Close()
-		var branches []struct{ Name string }
-		if err := json.NewDecoder(resp.Body).Decode(&branches); err != nil {
-			http.Error(w, "error", http.StatusInternalServerError)
-			log.Println("[ERROR]: [JSON]: ", err)
+			log.Println("[ERROR]: ", err, branches, rsp)
 			return
 		}
 		result := []string{}
 		for _, branch := range branches {
-			if strings.HasPrefix(branch.Name, "NBIP-") {
-				result = append(result, branch.Name)
+			if strings.HasPrefix(branch.GetName(), "NBIP-") {
+				result = append(result, branch.GetName())
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(result); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
 			log.Println("[ERROR]: ", err)
 		}
 	})
