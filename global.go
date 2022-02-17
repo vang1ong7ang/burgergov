@@ -15,6 +15,14 @@ var config struct {
 	github_repository string
 	listen_address    string
 }
+
+var data struct {
+	nbips []struct {
+	}
+	nobug []struct {
+	}
+}
+
 var client *github.Client
 
 func init() {
