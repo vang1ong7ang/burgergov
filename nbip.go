@@ -15,11 +15,12 @@ var nbips []struct {
 	RESULT struct{} // TODO: FIX
 }
 
-type getContentResponse struct{
+type getContentResponse struct {
 	branchName *string
-	result *github.RepositoryContent
-	resp *github.Response
+	result     *github.RepositoryContent
+	resp       *github.Response
 }
+
 var wg *sync.WaitGroup
 
 func sync_branches() {
@@ -35,7 +36,7 @@ func sync_branches() {
 	for _, branch := range branches {
 		if strings.HasPrefix(*branch.Name, "NBIP-") {
 			wg.Add(1)
-			response := getContentResponse{branch.Name , nil, nil}
+			response := getContentResponse{branch.Name, nil, nil}
 			resultChannel <- &response
 			go func(branchName *string) {
 				resultJson, _, resp, _ := client.Repositories.GetContents(
@@ -50,9 +51,9 @@ func sync_branches() {
 	//close(resultChannel)
 	for len(resultChannel) > 0 {
 		// If "result.json" does not exist, there is always an error != nil
-		response := <- resultChannel
+		response := <-resultChannel
 		resultJson, resp := response.result, response.resp
-		if resultJson == nil  && resp.StatusCode == 404 && resp.Header.Get("X-Github-Request-Id") != "" {
+		if resultJson == nil && resp.StatusCode == 404 && resp.Header.Get("X-Github-Request-Id") != "" {
 			// Active NBIP branch
 			activeBranchUrls = append(activeBranchUrls, *response.branchName)
 		}
