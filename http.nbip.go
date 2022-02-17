@@ -5,12 +5,16 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"path"
 )
 
 func get_text_content(target string, id string) ([]byte, error) {
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/"+config.github_repo+"/contents/"+target+"?ref=NBIP-"+id, nil)
+	values := url.Values{}
+	values.Add("ref", "NBIP-"+id)
+	urlStringObj := url.URL{Scheme: "https", Host: "api.github.com", RawQuery: values.Encode(), Path: path.Join("/", "repos", config.github_repo, "contents", target)}
+	req, err := http.NewRequest("GET", urlStringObj.String(), nil)
 	req.Header.Add("Authorization", "token "+config.github_token)
 	resp, err := client.Do(req)
 	if err != nil {
