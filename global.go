@@ -56,27 +56,32 @@ func init() {
 	tc := oauth2.NewClient(context.Background(), ts)
 	client = github.NewClient(tc)
 
-	data.nbips = make(map[string]struct {
-		SYNCTIME time.Time
-		README   string
-		NBIP     struct {
-			TIMESTAMP  int64
-			SCRIPTHASH util.Uint160
-			METHOD     string
-			ARGS       []interface{}
-		}
-		RESULT struct {
-			TIMESTAMP int64
-			PASSED    bool
-			YES       uint64
-			NO        uint64
-		}
-	})
 	data.nobug = make(map[util.Uint160]uint64)
 
 	go func() {
 		for ; ; time.Sleep(time.Hour) {
 			func() {
+				nbips := make(map[string]struct {
+					SYNCTIME time.Time
+					README   string
+					NBIP     struct {
+						TIMESTAMP  int64
+						SCRIPTHASH util.Uint160
+						METHOD     string
+						ARGS       []interface{}
+					}
+					RESULT struct {
+						TIMESTAMP int64
+						PASSED    bool
+						YES       uint64
+						NO        uint64
+					}
+				})
+				defer func() {
+					data.lock.Lock()
+					defer data.lock.Unlock()
+					data.nbips = nbips
+				}()
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 				defer cancel()
 				gb, gr, err := client.Repositories.ListBranches(ctx, config.github_owner, config.github_repository, &github.ListOptions{
@@ -137,14 +142,25 @@ func init() {
 						}
 					}()
 					func() {
-						data.lock.Lock()
-						defer data.lock.Unlock()
-						nbip := data.nbips[name]
-						defer func() { data.nbips[name] = nbip }()
+						var nbip struct {
+							SYNCTIME time.Time
+							README   string
+							NBIP     struct {
+								TIMESTAMP  int64
+								SCRIPTHASH util.Uint160
+								METHOD     string
+								ARGS       []interface{}
+							}
+							RESULT struct {
+								TIMESTAMP int64
+								PASSED    bool
+								YES       uint64
+								NO        uint64
+							}
+						}
 						nbip.SYNCTIME = synctime
 						nbip.README = string(readme)
-						nbip.NBIP.TIMESTAMP = 0
-						nbip.RESULT.TIMESTAMP = 0
+						defer func() { nbips[name] = nbip }()
 						if len(nbipjson) == 0 {
 							return
 						}
@@ -159,22 +175,14 @@ func init() {
 						}
 					}()
 				}
-				func() {
-					data.lock.Lock()
-					defer data.lock.Unlock()
-					for k, v := range data.nbips {
-						if v.SYNCTIME != synctime {
-							delete(data.nbips, k)
-						}
-					}
-				}()
-				func() {
-					data.lock.RLock()
-					defer data.lock.RUnlock()
-					for k := range data.nbips {
-						log.Println("[MAINTAINED]: ", k)
-					}
-				}()
+
+			}()
+			func() {
+				data.lock.RLock()
+				defer data.lock.RUnlock()
+				for k := range data.nbips {
+					log.Println("[MAINTAINED]: ", k)
+				}
 			}()
 			func() {
 				// load nobug
