@@ -40,8 +40,7 @@ var data struct {
 			NO        uint64
 		}
 	}
-	nobug map[string]struct {
-	}
+	nobug map[util.Uint160]uint64
 }
 
 var client *github.Client
@@ -73,6 +72,7 @@ func init() {
 			NO        uint64
 		}
 	})
+	data.nobug = make(map[util.Uint160]uint64)
 
 	go func() {
 		for ; ; time.Sleep(time.Hour) {
