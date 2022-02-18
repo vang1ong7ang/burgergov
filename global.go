@@ -242,23 +242,8 @@ func init() {
 				log.Println("[MAINTAINED]:", "[HOLDER]:", len(data.nobug))
 			}()
 			func() {
-				// TODO: Instead of retrieving the branches again,
-				// TODO: save the SHA of each NBIP branch in the previous steps, and retrieve those SHA here
-				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-				defer cancel()
-				gb, gr, err := client.Repositories.ListBranches(ctx, config.github_owner, config.github_repository, &github.ListOptions{
-					PerPage: 100,
-				})
-				if err != nil {
-					log.Println("[ERROR]: ", "[SYNC]:", err, gr)
-				}
-				// fill votes
-				for _, branch := range gb {
-					name := branch.GetName()
-					if !strings.HasPrefix(name, "NBIP-") {
-						continue
-					}
-					if data.nbips[name].RESULT.TIMESTAMP != 0 {
+				for name, v := range data.nbips {
+					if v.RESULT.TIMESTAMP != 0 {
 						continue
 					}
 					// count
@@ -293,6 +278,7 @@ func init() {
 						}
 						if len(commits) < perPage {break} else {currentPage += 1}
 					}
+					//log.Println(data.votes[name])
 				}
 			}()
 		}
