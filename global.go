@@ -25,27 +25,68 @@ var config struct {
 	listen_address    string
 }
 
-var data struct {
-	lock  sync.RWMutex
-	nbips map[string]struct {
-		SYNCTIME time.Time
-		README   string
-		NBIP     struct {
-			TIMESTAMP  int64
-			SCRIPTHASH util.Uint160
-			METHOD     string
-			ARGS       []interface{}
-		}
-		RESULT struct {
-			TIMESTAMP int64
-			PASSED    bool
-			YES       uint64
-			NO        uint64
-		}
+type state_nbip struct {
+	SYNCTIME time.Time
+	README   string
+	NBIP     *struct {
+		TIMESTAMP  int64
+		SCRIPTHASH util.Uint160
+		METHOD     string
+		ARGS       []interface{}
 	}
+	RESULT *struct {
+		TIMESTAMP  int64
+		BLOCKINDEX uint64
+		PASSED     bool
+		YES        uint64
+		NO         uint64
+	}
+}
+
+type state struct {
+	lock  sync.RWMutex
+	nbips map[string]state_nbip
 	nobug map[util.Uint160]uint64
 	votes map[string]map[util.Uint160]bool
 }
+
+func (me *state) set_nbips(v map[string]state_nbip) {
+	me.lock.Lock()
+	defer me.lock.Unlock()
+	me.nbips = v
+}
+
+func (me *state) get_nbips() map[string]state_nbip {
+	me.lock.RLock()
+	defer me.lock.RUnlock()
+	return me.nbips
+}
+
+func (me *state) set_nobug(v map[util.Uint160]uint64) {
+	me.lock.Lock()
+	defer me.lock.Unlock()
+	me.nobug = v
+}
+
+func (me *state) get_nobug() map[util.Uint160]uint64 {
+	me.lock.RLock()
+	defer me.lock.RUnlock()
+	return me.nobug
+}
+
+func (me *state) set_votes(v map[string]map[util.Uint160]bool) {
+	me.lock.Lock()
+	defer me.lock.Unlock()
+	me.votes = v
+}
+
+func (me *state) get_votes() map[string]map[util.Uint160]bool {
+	me.lock.RLock()
+	defer me.lock.RUnlock()
+	return me.votes
+}
+
+var data state
 
 var client *github.Client
 
@@ -62,44 +103,14 @@ func init() {
 
 	http.DefaultClient.Timeout = time.Second * 10
 
-	data.nbips = make(map[string]struct {
-		SYNCTIME time.Time
-		README   string
-		NBIP     struct {
-			TIMESTAMP  int64
-			SCRIPTHASH util.Uint160
-			METHOD     string
-			ARGS       []interface{}
-		}
-		RESULT struct {
-			TIMESTAMP int64
-			PASSED    bool
-			YES       uint64
-			NO        uint64
-		}
-	})
-	data.nobug = make(map[util.Uint160]uint64)
-	data.votes = make(map[string]map[util.Uint160]bool)
+	data.set_nbips(make(map[string]state_nbip))
+	data.set_nobug(make(map[util.Uint160]uint64))
+	data.set_votes(make(map[string]map[util.Uint160]bool))
 
 	go func() {
 		for ; ; time.Sleep(time.Hour) {
 			func() {
-				nbips := make(map[string]struct {
-					SYNCTIME time.Time
-					README   string
-					NBIP     struct {
-						TIMESTAMP  int64
-						SCRIPTHASH util.Uint160
-						METHOD     string
-						ARGS       []interface{}
-					}
-					RESULT struct {
-						TIMESTAMP int64
-						PASSED    bool
-						YES       uint64
-						NO        uint64
-					}
-				})
+				nbips := make(map[string]state_nbip)
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 				defer cancel()
 				gb, gr, err := client.Repositories.ListBranches(ctx, config.github_owner, config.github_repository, &github.ListOptions{
@@ -115,10 +126,30 @@ func init() {
 					if strings.HasPrefix(name, "NBIP-") == false {
 						continue
 					}
-					var readme []byte
-					var nbipjson []byte
-					var resultjson []byte
+					item := struct {
+						SYNCTIME time.Time
+						README   string
+						NBIP     *struct {
+							TIMESTAMP  int64
+							SCRIPTHASH util.Uint160
+							METHOD     string
+							ARGS       []interface{}
+						}
+						RESULT *struct {
+							TIMESTAMP  int64
+							BLOCKINDEX uint64
+							PASSED     bool
+							YES        uint64
+							NO         uint64
+						}
+					}{
+						synctime,
+						"",
+						nil,
+						nil,
+					}
 					func() {
+						// TODO: RETRY
 						reader, err := client.Repositories.DownloadContents(ctx, config.github_owner, config.github_repository, "README.md", &github.RepositoryContentGetOptions{
 							Ref: name,
 						})
@@ -127,10 +158,12 @@ func init() {
 							return
 						}
 						defer reader.Close()
-						readme, err = io.ReadAll(reader)
+						readme, err := io.ReadAll(reader)
 						if err != nil {
 							// TODO: log
+							return
 						}
+						item.README = string(readme)
 					}()
 					func() {
 						reader, err := client.Repositories.DownloadContents(ctx, config.github_owner, config.github_repository, "nbip.json", &github.RepositoryContentGetOptions{
@@ -141,10 +174,17 @@ func init() {
 							return
 						}
 						defer reader.Close()
-						nbipjson, err = io.ReadAll(reader)
-						if err != nil {
+						nbip := new(struct {
+							TIMESTAMP  int64
+							SCRIPTHASH util.Uint160
+							METHOD     string
+							ARGS       []interface{}
+						})
+						if err := json.NewDecoder(reader).Decode(nbip); err != nil {
 							// TODO: log
+							return
 						}
+						item.NBIP = nbip
 					}()
 					func() {
 						reader, err := client.Repositories.DownloadContents(ctx, config.github_owner, config.github_repository, "result.json", &github.RepositoryContentGetOptions{
@@ -155,49 +195,22 @@ func init() {
 							return
 						}
 						defer reader.Close()
-						resultjson, err = io.ReadAll(reader)
-						if err != nil {
+						result := new(struct {
+							TIMESTAMP  int64
+							BLOCKINDEX uint64
+							PASSED     bool
+							YES        uint64
+							NO         uint64
+						})
+						if err := json.NewDecoder(reader).Decode(result); err != nil {
 							// TODO: log
-						}
-					}()
-					func() {
-						var nbip struct {
-							SYNCTIME time.Time
-							README   string
-							NBIP     struct {
-								TIMESTAMP  int64
-								SCRIPTHASH util.Uint160
-								METHOD     string
-								ARGS       []interface{}
-							}
-							RESULT struct {
-								TIMESTAMP int64
-								PASSED    bool
-								YES       uint64
-								NO        uint64
-							}
-						}
-						nbip.SYNCTIME = synctime
-						nbip.README = string(readme)
-						defer func() { nbips[name] = nbip }()
-						if len(nbipjson) == 0 {
 							return
 						}
-						if err := json.Unmarshal(nbipjson, &nbip.NBIP); err != nil {
-							// TODO: log
-						}
-						if len(resultjson) == 0 {
-							return
-						}
-						if err := json.Unmarshal(resultjson, &nbip.RESULT); err != nil {
-							// TODO: log
-						}
+						item.RESULT = result
 					}()
+					nbips[name] = item
 				}
-				data.lock.Lock()
-				defer data.lock.Unlock()
-				data.nbips = nbips
-
+				data.set_nbips(nbips)
 			}()
 			func() {
 				// TODO: load more addresses
@@ -229,72 +242,52 @@ func init() {
 					}
 					nobug[r.Address] = balance
 				}
-				data.lock.Lock()
-				defer data.lock.Unlock()
-				data.nobug = nobug
+				data.set_nobug(nobug)
 			}()
 			func() {
-				data.lock.RLock()
-				defer data.lock.RUnlock()
-				for k := range data.nbips {
-					log.Println("[MAINTAINED]: ", k)
-				}
-				log.Println("[MAINTAINED]:", "[HOLDER]:", len(data.nobug))
-			}()
-			func() {
-				// TODO: Instead of retrieving the branches again,
-				// TODO: save the SHA of each NBIP branch in the previous steps, and retrieve those SHA here
 				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 				defer cancel()
-				gb, gr, err := client.Repositories.ListBranches(ctx, config.github_owner, config.github_repository, &github.ListOptions{
-					PerPage: 100,
-				})
-				if err != nil {
-					log.Println("[ERROR]: ", "[SYNC]:", err, gr)
-				}
-				// fill votes
-				for _, branch := range gb {
-					name := branch.GetName()
-					if !strings.HasPrefix(name, "NBIP-") {
+				reg := regexp.MustCompile(`^0x(\w{40}) VOTE (FOR|AGAINST) NBIP-\d+\.$`)
+				votes := make(map[string]map[util.Uint160]bool)
+				for k, v := range data.nbips {
+					if v.RESULT != nil {
 						continue
 					}
-					if data.nbips[name].RESULT.TIMESTAMP != 0 {
-						continue
-					}
-					// count
-					currentPage := 1
-					perPage := 100
-					for{
-						ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-						commits, _, err := client.Repositories.ListCommits(ctx, config.github_owner, config.github_repository,
-							&github.CommitsListOptions{SHA: name, ListOptions: github.ListOptions{Page: currentPage, PerPage: perPage}})
-						cancel()
-						if err != nil{break}
-						if commits == nil{break}
-
-						if data.votes[name] == nil {
-							data.votes[name] = make(map[util.Uint160]bool)
+					for item, p := make(map[util.Uint160]bool), 1; p < 64; p++ {
+						grc, gr, err := client.Repositories.ListCommits(ctx, config.github_owner, config.github_repository, &github.CommitsListOptions{SHA: k, ListOptions: github.ListOptions{Page: p, PerPage: 100}})
+						if err != nil {
+							log.Println("ERROR", err, gr)
+							// TODO: see if EOF is here
+							break
 						}
-
-						for _, commit := range commits {
-							message := *commit.Commit.Message
-							re := regexp.MustCompile("(0x\\w{40}) VOTE (FOR|AGAINST) " + name)
-							match := re.FindStringSubmatch(message)
-							if match == nil {
+						for _, commit := range grc {
+							message := commit.GetCommit().GetMessage()
+							match := reg.FindStringSubmatch(message)
+							if len(match) != 3 {
 								continue
 							}
-							voter, err := util.Uint160DecodeStringBE(match[1][2:])
+							voter, err := util.Uint160DecodeStringLE(match[1])
 							if err != nil {
 								continue
 							}
-							if _, ok := data.votes[name][voter]; !ok {
-								data.votes[name][voter] = match[2] == "FOR"
-							}
+							item[voter] = match[2] == "FOR"
 						}
-						if len(commits) < perPage {break} else {currentPage += 1}
+						if len(grc) < 100 {
+							votes[k] = item
+							break
+						}
 					}
 				}
+				data.set_votes(votes)
 			}()
+			func() {
+				for k := range data.get_nbips() {
+					log.Println("[NBIP]:", k)
+				}
+				log.Println("[ADDRESSES]:", len(data.get_nobug()))
+				log.Println("[ACTIVE]:", len(data.get_votes()))
+			}()
+
 		}
 	}()
 }

@@ -131,5 +131,6 @@ func init() {
 			log.Println("[ERROR]: ", err, grcr, gr)
 			return
 		}
+		// TODO: update local cache
 	})
 }
