@@ -48,12 +48,17 @@ type state_count struct {
 	NO  uint64
 }
 
+type state_vote struct {
+	TIMESTAMP time.Time
+	YES       bool
+}
+
 type state struct {
 	lock sync.RWMutex
 
 	nbips map[string]state_nbip
 	nobug map[scripthash]uint64
-	votes map[string]map[scripthash]bool
+	votes map[string]map[scripthash]state_vote
 
 	counts map[string]state_count
 }
@@ -82,13 +87,30 @@ func (me *state) get_nobug() map[scripthash]uint64 {
 	return me.nobug
 }
 
-func (me *state) set_votes(v map[string]map[scripthash]bool) {
+func (me *state) update_votes(v map[string]map[scripthash]state_vote, t time.Time) {
+	me.lock.Lock()
+	defer me.lock.Unlock()
+	for kpv, pv := range me.votes {
+		for ksv, sv := range pv {
+			if sv.TIMESTAMP.After(t) {
+				if item, ok := v[kpv]; ok {
+					if _, ok := item[ksv]; ok == false {
+						item[ksv] = sv
+					}
+				}
+			}
+		}
+	}
+	me.votes = v
+}
+
+func (me *state) set_votes(v map[string]map[scripthash]state_vote) {
 	me.lock.Lock()
 	defer me.lock.Unlock()
 	me.votes = v
 }
 
-func (me *state) get_votes() map[string]map[scripthash]bool {
+func (me *state) get_votes() map[string]map[scripthash]state_vote {
 	me.lock.RLock()
 	defer me.lock.RUnlock()
 	return me.votes
@@ -244,15 +266,16 @@ func (me *state) biz_refresh_nobug() {
 }
 
 func (me *state) biz_refresh_votes() {
+	start_time := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	reg := regexp.MustCompile(`^0x(\w{40}) VOTE (FOR|AGAINST) NBIP-\d+\.$`)
-	votes := make(map[string]map[scripthash]bool)
+	votes := make(map[string]map[scripthash]state_vote)
 	for k, v := range me.get_nbips() {
 		if v.RESULT != nil {
 			continue
 		}
-		for item, p := make(map[scripthash]bool), 1; p < 64; p++ {
+		for item, p := make(map[scripthash]state_vote), 1; p < 64; p++ {
 			grc, gr, err := client.Repositories.ListCommits(ctx, config.github_owner, config.github_repository, &github.CommitsListOptions{SHA: k, ListOptions: github.ListOptions{Page: p, PerPage: 100}})
 			if err != nil {
 				log.Println("ERROR", err, gr)
@@ -269,7 +292,7 @@ func (me *state) biz_refresh_votes() {
 				if err != nil {
 					continue
 				}
-				item[voter] = match[2] == "FOR"
+				item[voter] = state_vote{TIMESTAMP: commit.Author.CreatedAt.Time, YES: match[2] == "FOR"}
 			}
 			if len(grc) < 100 {
 				votes[k] = item
@@ -277,7 +300,8 @@ func (me *state) biz_refresh_votes() {
 			}
 		}
 	}
-	me.set_votes(votes)
+
+	me.update_votes(votes, start_time)
 }
 
 func (me *state) biz_refresh_counts() {
@@ -287,7 +311,7 @@ func (me *state) biz_refresh_counts() {
 	for k, v := range votes {
 		count := state_count{}
 		for k, v := range v {
-			if v {
+			if v.YES {
 				count.YES += nobug[k]
 			} else {
 				count.NO += nobug[k]
@@ -337,7 +361,7 @@ func init() {
 
 	data.set_nbips(make(map[string]state_nbip))
 	data.set_nobug(make(map[scripthash]uint64))
-	data.set_votes(make(map[string]map[scripthash]bool))
+	data.set_votes(make(map[string]map[scripthash]state_vote))
 	data.set_counts(make(map[string]state_count))
 
 	go func() {
