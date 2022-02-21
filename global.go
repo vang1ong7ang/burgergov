@@ -307,6 +307,13 @@ func (me *state) biz_log() {
 	log.Println("[ACTIVE]:", len(me.get_votes()))
 }
 
+func (me *state) biz_refresh() {
+	me.biz_refresh_nbips()
+	me.biz_refresh_votes()
+	me.biz_refresh_counts()
+	me.biz_log()
+}
+
 var data state
 
 var client *github.Client
@@ -329,13 +336,11 @@ func init() {
 	data.set_nbips(make(map[string]state_nbip))
 	data.set_nobug(make(map[util.Uint160]uint64))
 	data.set_votes(make(map[string]map[util.Uint160]bool))
+	data.set_counts(make(map[string]state_count))
 
 	go func() {
 		for ; ; time.Sleep(time.Hour) {
-			data.biz_refresh_nbips()
-			data.biz_refresh_votes()
-			data.biz_refresh_counts()
-			data.biz_log()
+			data.biz_refresh()
 		}
 	}()
 }
