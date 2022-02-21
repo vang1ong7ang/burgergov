@@ -48,6 +48,7 @@ func init() {
 			http.Error(w, "invalid nbip", http.StatusBadRequest)
 			return
 		}
+		nbipStr := fmt.Sprintf("NBIP-%d", nbip)
 		// TODO: check nbip
 		// active
 		// voted
@@ -74,7 +75,7 @@ func init() {
 				http.Error(w, "invalid public key", http.StatusBadRequest)
 				return
 			}
-			message := fmt.Sprintf("I VOTE %s NBIP-%d.", word[yes], nbip)
+			message := fmt.Sprintf("I VOTE %s %s.", word[yes], nbipStr)
 			if len(message) > 64 {
 				http.Error(w, "invalid nbip", http.StatusBadRequest)
 				return
@@ -118,9 +119,9 @@ func init() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 		grcr, gr, err := client.Repositories.CreateFile(ctx, config.github_owner, config.github_repository, fmt.Sprintf("0x%s.json", sh.StringLE()), &github.RepositoryContentFileOptions{
-			Branch:  strptr(fmt.Sprintf("NBIP-%d", nbip)),
+			Branch:  &nbipStr,
 			Content: content,
-			Message: strptr(fmt.Sprintf("0x%s VOTE %s NBIP-%d.", sh.StringLE(), word[yes], nbip)),
+			Message: strptr(fmt.Sprintf("0x%s VOTE %s %s.", sh.StringLE(), word[yes], nbipStr)),
 			Author: &github.CommitAuthor{
 				Name:  strptr(address.Uint160ToString(sh)),
 				Email: strptr(fmt.Sprintf("%s@NOREPLY", address.Uint160ToString(sh))),
@@ -131,6 +132,6 @@ func init() {
 			log.Println("[ERROR]: ", err, grcr, gr)
 			return
 		}
-		// TODO: update local cache
+		data.append_votes(nbipStr, scripthash{sh}, yes)
 	})
 }

@@ -110,6 +110,17 @@ func (me *state) set_votes(v map[string]map[scripthash]state_vote) {
 	me.votes = v
 }
 
+func (me *state) append_votes(nbip string, voter scripthash, v bool) {
+	me.lock.Lock()
+	defer me.lock.Unlock()
+	if nbip, ok := me.votes[nbip]; ok {
+		nbip[voter] = state_vote{
+			TIMESTAMP: time.Now(),
+			YES:       v,
+		}
+	}
+}
+
 func (me *state) get_votes() map[string]map[scripthash]state_vote {
 	me.lock.RLock()
 	defer me.lock.RUnlock()
