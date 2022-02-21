@@ -23,6 +23,7 @@ var config struct {
 	github_owner      string
 	github_repository string
 	listen_address    string
+	neofura_request   string
 }
 
 type state_nbip struct {
@@ -213,7 +214,7 @@ func (me *state) biz_refresh_nbips() {
 func (me *state) biz_refresh_nobug() {
 	// TODO: load more addresses
 	nobug := make(map[util.Uint160]uint64)
-	req := strings.NewReader(`{"jsonrpc": "2.0","method": "GetAssetHoldersByContractHash","params": {"ContractHash":"0x54806765d451e2b0425072730d527d05fbfa9817","Limit":4096,"Skip":0},"id": 1}`)
+	req := strings.NewReader(config.neofura_request)
 	rsp, err := http.Post("https://neofura.ngd.network", "application/json", req)
 	if err != nil {
 		log.Println("[ERROR]: ", "[SYNC]:", err, rsp)
@@ -315,6 +316,8 @@ func init() {
 	config.github_owner = os.ExpandEnv("${GITHUBOWNER}")
 	config.github_repository = os.ExpandEnv("${GITHUBREPOSITORY}")
 	config.listen_address = os.ExpandEnv(":${PORT}")
+	config.neofura_request = os.ExpandEnv(`{"jsonrpc": "2.0","method": "GetAssetHoldersByContractHash","params": {"ContractHash":"${NOBUG}","Limit":4096,"Skip":0},"id": 1}`)
+
 	log.Println("[LISTEN]:", config.listen_address)
 
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: config.github_token})
