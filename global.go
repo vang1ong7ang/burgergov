@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/go-github/github"
-	"github.com/nspcc-dev/neo-go/pkg/util"
 	"golang.org/x/oauth2"
 )
 
@@ -31,7 +30,7 @@ type state_nbip struct {
 	README   string
 	NBIP     *struct {
 		TIMESTAMP  int64
-		SCRIPTHASH util.Uint160
+		SCRIPTHASH scripthash
 		METHOD     string
 		ARGS       []interface{}
 	}
@@ -53,8 +52,8 @@ type state struct {
 	lock sync.RWMutex
 
 	nbips map[string]state_nbip
-	nobug map[util.Uint160]uint64
-	votes map[string]map[util.Uint160]bool
+	nobug map[scripthash]uint64
+	votes map[string]map[scripthash]bool
 
 	counts map[string]state_count
 }
@@ -71,25 +70,25 @@ func (me *state) get_nbips() map[string]state_nbip {
 	return me.nbips
 }
 
-func (me *state) set_nobug(v map[util.Uint160]uint64) {
+func (me *state) set_nobug(v map[scripthash]uint64) {
 	me.lock.Lock()
 	defer me.lock.Unlock()
 	me.nobug = v
 }
 
-func (me *state) get_nobug() map[util.Uint160]uint64 {
+func (me *state) get_nobug() map[scripthash]uint64 {
 	me.lock.RLock()
 	defer me.lock.RUnlock()
 	return me.nobug
 }
 
-func (me *state) set_votes(v map[string]map[util.Uint160]bool) {
+func (me *state) set_votes(v map[string]map[scripthash]bool) {
 	me.lock.Lock()
 	defer me.lock.Unlock()
 	me.votes = v
 }
 
-func (me *state) get_votes() map[string]map[util.Uint160]bool {
+func (me *state) get_votes() map[string]map[scripthash]bool {
 	me.lock.RLock()
 	defer me.lock.RUnlock()
 	return me.votes
@@ -129,7 +128,7 @@ func (me *state) biz_refresh_nbips() {
 			README   string
 			NBIP     *struct {
 				TIMESTAMP  int64
-				SCRIPTHASH util.Uint160
+				SCRIPTHASH scripthash
 				METHOD     string
 				ARGS       []interface{}
 			}
@@ -174,7 +173,7 @@ func (me *state) biz_refresh_nbips() {
 			defer reader.Close()
 			nbip := new(struct {
 				TIMESTAMP  int64
-				SCRIPTHASH util.Uint160
+				SCRIPTHASH scripthash
 				METHOD     string
 				ARGS       []interface{}
 			})
@@ -213,7 +212,7 @@ func (me *state) biz_refresh_nbips() {
 
 func (me *state) biz_refresh_nobug() {
 	// TODO: load more addresses
-	nobug := make(map[util.Uint160]uint64)
+	nobug := make(map[scripthash]uint64)
 	req := strings.NewReader(config.neofura_request)
 	rsp, err := http.Post("https://neofura.ngd.network", "application/json", req)
 	if err != nil {
@@ -224,7 +223,7 @@ func (me *state) biz_refresh_nobug() {
 	var output struct {
 		Result struct {
 			Result []struct {
-				Address util.Uint160
+				Address scripthash
 				Balance string
 			}
 		}
@@ -248,12 +247,12 @@ func (me *state) biz_refresh_votes() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	reg := regexp.MustCompile(`^0x(\w{40}) VOTE (FOR|AGAINST) NBIP-\d+\.$`)
-	votes := make(map[string]map[util.Uint160]bool)
+	votes := make(map[string]map[scripthash]bool)
 	for k, v := range me.get_nbips() {
 		if v.RESULT != nil {
 			continue
 		}
-		for item, p := make(map[util.Uint160]bool), 1; p < 64; p++ {
+		for item, p := make(map[scripthash]bool), 1; p < 64; p++ {
 			grc, gr, err := client.Repositories.ListCommits(ctx, config.github_owner, config.github_repository, &github.CommitsListOptions{SHA: k, ListOptions: github.ListOptions{Page: p, PerPage: 100}})
 			if err != nil {
 				log.Println("ERROR", err, gr)
@@ -266,7 +265,7 @@ func (me *state) biz_refresh_votes() {
 				if len(match) != 3 {
 					continue
 				}
-				voter, err := util.Uint160DecodeStringLE(match[1])
+				voter, err := ScripthashDecodeStringLE(match[1])
 				if err != nil {
 					continue
 				}
@@ -309,6 +308,7 @@ func (me *state) biz_log() {
 
 func (me *state) biz_refresh() {
 	me.biz_refresh_nbips()
+	me.biz_refresh_nobug()
 	me.biz_refresh_votes()
 	me.biz_refresh_counts()
 	me.biz_log()
@@ -319,6 +319,8 @@ var data state
 var client *github.Client
 
 func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	config.github_token = os.ExpandEnv("${GITHUBTOKEN}")
 	config.github_owner = os.ExpandEnv("${GITHUBOWNER}")
 	config.github_repository = os.ExpandEnv("${GITHUBREPOSITORY}")
@@ -334,8 +336,8 @@ func init() {
 	http.DefaultClient.Timeout = time.Second * 10
 
 	data.set_nbips(make(map[string]state_nbip))
-	data.set_nobug(make(map[util.Uint160]uint64))
-	data.set_votes(make(map[string]map[util.Uint160]bool))
+	data.set_nobug(make(map[scripthash]uint64))
+	data.set_votes(make(map[string]map[scripthash]bool))
 	data.set_counts(make(map[string]state_count))
 
 	go func() {
